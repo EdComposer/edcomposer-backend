@@ -81,21 +81,12 @@ async def process_data(inp_array):
 
 
 def generatePictures(inp_array):
-    current_loop = asyncio.get_event_loop()
-    new_loop = None
+    for currObj in inp_array:
+        print(currObj.get("prompt"))
+    loop = asyncio.get_event_loop()
+    return_array = loop.run_until_complete(process_data(test_array))
 
-    # If there is no current event loop, create one
-    if current_loop is None:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-    else:
-        new_loop = current_loop
+    return return_array
 
-    try:
-        for currObj in inp_array:
-            print(currObj.get("prompt"))
-        return_array = new_loop.run_until_complete(process_data(test_array))
-        return return_array
-    finally:
-        if new_loop and new_loop != current_loop:
-            new_loop.close()
+
+print(generatePictures(test_array))
