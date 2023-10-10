@@ -10,7 +10,7 @@ import httpx
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 async def picGen(dalle: bool, prompt: str):
@@ -21,7 +21,6 @@ async def picGen(dalle: bool, prompt: str):
 
 
 async def call_dalle_api(prompt):
-
     print("running")
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post(
@@ -41,23 +40,29 @@ async def call_dalle_api(prompt):
         return response["data"][0]["url"]
 
 
+# async def unsplash_it(query):
+#     url = f"https://edcomposer.vercel.app/api/getGoogleResult?search={query}"
+#     response = await requests.get(url)
+#     return response.json()[0]
+
+
 async def unsplash_it(query):
     url = f"https://edcomposer.vercel.app/api/getGoogleResult?search={query}"
-    response = await requests.get(url)
-    return response.json()[0]
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()[0]
 
 
 test_array = [
-    "Phases of the Revolution",
-    "The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.",
-    "The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy.",
-    "The Radical Phase (1792-1794) witnessed events like the Reign of Terror, mass executions, and the fall of the monarchy.",
-    "The Directory (1795-1799) faced political turbulence, setting the stage for Napoleon Bonaparte's rise.",
-    "Napoleon's ascent in 1799 marked the Revolution's culmination and the establishment of the Consulate.",
-    "Key Figures",
-    "Maximilien Robespierre, a leader of the radical Jacobins, advocated revolutionary justice during the Reign of Terror.",
-    "The execution of King Louis XVI by guillotine in 1793 symbolized a critical moment in the Revolution.",
-    "Napoleon Bonaparte, a skilled military general, rose to power and declared himself Emperor, introducing the Napoleonic Code.",
+    {"prompt": "Phases of the Revolution", "generate": True},
+    {
+        "prompt": "The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.",
+        "generate": False,
+    },
+    {
+        "prompt": "The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy.",
+        "generate": True,
+    },
 ]
 
 return_array = []
@@ -65,15 +70,23 @@ return_array = []
 
 async def process_data(inp_array):
     start = time.time()
-    
-    tasks = [call_dalle_api(prompt) for prompt in inp_array]
+
+    tasks = [
+        picGen(currObj.get("generate"), currObj.get("prompt")) for currObj in inp_array
+    ]
     return_array = await asyncio.gather(*tasks)
     end = time.time()
     print(end - start)
     return return_array
 
 
-loop = asyncio.get_event_loop()
-return_array = loop.run_until_complete(process_data(test_array))
+def generatePictures(inp_array):
+    for currObj in inp_array:
+        print(currObj.get("prompt"))
+    loop = asyncio.get_event_loop()
+    return_array = loop.run_until_complete(process_data(test_array))
 
-print(return_array)
+    return return_array
+
+
+print(generatePictures(test_array))
