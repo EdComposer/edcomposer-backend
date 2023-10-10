@@ -80,35 +80,49 @@ THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT N
         if len(image_generation_list_parsed):
             image_generation_lists.append(image_generation_list_parsed)
 
-    # Generate audio URLs asynchronously
-    print("Generating audio URLs...")
-    audio_url_list = await generate_audio_urls(audio_generation_lists)
-    print("Audio URLs received:", audio_url_list)
+    # # Generate audio URLs asynchronously
+    # print("Generating audio URLs...")
+    # audio_url_list = await generate_audio_urls(audio_generation_lists)
+    # print("Audio URLs received:", audio_url_list)
 
     # Prepare video data
+    audioUrlList = await generate_audio_urls(audio_generation_lists)
+
+    imageUrlList = await picGen(image_generation_lists)
+
     video_data = []
 
-    for i in range(len(audio_generation_lists)):
+    for audio_urls, image_urls, caption in zip(audioUrlList, imageUrlList, audio_generation_lists):
         current_data = []
-        for j in range(len(audio_url_list[i])):
+        for audio_url,image_url, caption in zip(audio_urls, image_urls, caption):
             current_data.append({
-                'caption': audio_generation_lists[i][j],
-                'audio': audio_url_list[i][j],
-                'image': image_generation_lists[i][j]
+                'caption': caption,
+                'audio': audio_url,
+                'image': image_url  # Replace with the appropriate image URL
             })
+
         video_data.append(current_data)
 
-    print("Video data generated.")
+    print("Video data generated.",video_data)
 
     return video_data
 
 
 # Additional code for image generation
-async def picGen(dalle: bool, prompt: str):
-    if dalle:
-        return await call_dalle_api(prompt)
-    else:
-        return await unsplash_it(prompt)
+async def picGen(input: list[list[dict[str, str]]]):
+    output = []
+
+    for i in range(0, len(input)):
+        currentOutput = []
+        for j in range(0, len(input[i])):
+            if input[i][j]["generate"]:
+                currentOutput.append(await call_dalle_api(input[i][j]["prompt"]))
+            else:
+                currentOutput.append(await unsplash_it(input[i][j]["prompt"]))
+        output.append(currentOutput)
+
+    return output
+
 
 async def call_dalle_api(prompt):
     async with httpx.AsyncClient(timeout=90) as client:
@@ -122,8 +136,10 @@ async def call_dalle_api(prompt):
                 "response_format": "url",
             },
         )
-
+        print(response)
+        print(response.content)
         response = response.json()
+        print("DALLE response: " + str(response))
         return response["data"][0]["url"]
 
 async def unsplash_it(query):
@@ -137,4 +153,4 @@ async def unsplash_it(query):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
