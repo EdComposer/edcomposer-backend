@@ -31,7 +31,7 @@ async def get_audio(text_prompt):
     response = polly.synthesize_speech(VoiceId='Joanna', OutputFormat='mp3', Text=text_prompt)
     
     # Generate a unique object key
-    object_key = f"{datetime.timestamp(datetime.now())}-{text_prompt}.mp3"
+    object_key = f"{datetime.timestamp(datetime.now())}.mp3"
 
     # Save the audio from the response
     file_path = f"audio/{object_key}"
@@ -60,12 +60,10 @@ async def process_batch(text_prompts):
     return audio_urls
 
 
+async def generate_audio_urls(audio_prompts):
+    audio_url_list = await process_batch(audio_prompts)
+    return audio_url_list
 
-def getAudioUrl(text_prompts):
-    audio_urls = asyncio.run(process_batch(text_prompts))
-    return audio_urls
-urls=getAudioUrl(["The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.","The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy."])
-print(urls)
 # # Example usage:
 # text_prompts = [
 #     "The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.",
