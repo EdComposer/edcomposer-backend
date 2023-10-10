@@ -3,6 +3,7 @@ import boto3
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
+import aiofiles
 
 # Load the environment variables
 load_dotenv()
@@ -35,8 +36,8 @@ async def get_audio(text_prompt):
     # Save the audio from the response
     file_path = f"audio/{object_key}"
 
-    with open(file_path, "wb") as file:
-        file.write(response["AudioStream"].read())
+    async with aiofiles.open(file_path, "wb") as file:
+        await file.write(response["AudioStream"].read())
 
     try:
         s3.upload_file(file_path, "edcomposer", object_key)
@@ -58,16 +59,20 @@ async def process_batch(text_prompts):
     audio_urls = await asyncio.gather(*tasks)
     return audio_urls
 
-# Example usage:
-text_prompts = [
-    "The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.",
-    "The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy.",
-    # Add more text prompts here
-]
 
-loop = asyncio.get_event_loop()
-audio_urls = loop.run_until_complete(process_batch(text_prompts))
 
-for i, url in enumerate(audio_urls):
-    if url:
-        print(f"Audio URL for Prompt {i + 1}: {url}")
+def getAudioUrl(text_prompts):
+    audio_urls = asyncio.run(process_batch(text_prompts))
+    return audio_urls
+urls=getAudioUrl(["The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.","The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy."])
+print(urls)
+# # Example usage:
+# text_prompts = [
+#     "The Estates-General convened in 1789, leading to the formation of the National Assembly, representing the common people's interests.",
+#     "The National Constituent Assembly (1789-1791) drafted the Constitution of 1791, establishing a constitutional monarchy.",
+#     # Add more text prompts here
+# ]
+
+# for i, url in enumerate(audio_urls):
+#     if url:
+#         print(f"Audio URL for Prompt {i + 1}: {url}")
