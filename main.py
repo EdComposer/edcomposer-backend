@@ -85,34 +85,29 @@ THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT N
     # # Generate audio URLs asynchronously
     # print("Generating audio URLs...")
     # audio_url_list = await generate_audio_urls(audio_generation_lists)
-    # print("Audio URLs received:", audio_url_list)
 
     # Prepare video data
     audioUrlList = await generate_audio_urls(audio_generation_lists)
     print("This is audioUrlList", audioUrlList)
 
-    print("This is audio_generation_lists", audio_generation_lists)
-    print("This is imageUrlList", image_generation_lists)
+    print("This is subtitle list", audio_generation_lists)
 
-    imageUrlList = await picGen(image_generation_lists,[])
-    print("This is imageUrlList", image_generation_lists)
-
+    imageUrlList = await picGen(image_generation_lists)
+    print("This is imageUrlList", imageUrlList)
+    formatted_data = {"sequences": []}
     # create a list of dictionaries for each item in the audio_generation_lists that contains the audio url, image url, and caption
-    for audio_urls, image_urls, caption in zip(
-        audioUrlList, imageUrlList, audio_generation_lists
-    ):
-        current_data = []
-        for i in range(len(caption)):
-            current_data.append(
-                {
-                    "audio_url": audio_urls[i],
-                    "image_url": image_urls[i],
-                    "caption": caption[i],
-                }
-            )
-        video_data.append(current_data)
+    for audio_urls, audio_texts, image_data in zip(audioUrlList, audio_generation_lists, imageUrlList):
+        sequence = []
 
-    video_data = []
+        for audio_url, audio_text, image_info in zip(audio_urls, audio_texts, image_data):
+            sequence.append({
+                "caption": audio_text,
+                "audio": audio_url,
+                "image": extractImage(image_info)[0]
+            })
+
+        formatted_data["sequences"].append(sequence)
+   
 
     # for audio_urls, image_urls, caption in zip(audioUrlList, imageUrlList, audio_generation_lists):
     #     current_data = []
@@ -126,36 +121,76 @@ THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT N
     #         )
     #     video_data.append(current_data)
 
-    final_data = {"sequences": video_data, "metadata": await generate_metadata(prompt)}
+    formatted_data["metadata"] =   await generate_metadata(prompt)
 
-    print("Video data generated.", final_data)
-    return final_data
+    print("Video data generated.", formatted_data)
+    return formatted_data
 
 
 #I want to traverse to image_generation_lists and then for each element in the list, i want to call the picGen function. I want to do this for each element in the list when i dont know the dimension of the list 
 
-async def picGen(input_json, finalURLList: list):
-  """Recursively generates image URLs for the given input JSON.
+async def picGen(input_list):
+    finalList = []
 
-  Args:
-    input_json: A list of dictionaries, where each dictionary contains a "generate"
-      boolean field and a "prompt" string field.
-    finalURLList: A list of lists of image URLs.
+    for i in input_list:
+        if isinstance(i, dict):
+            l = []
+            if i["generate"]:
+                image_url = await call_dalle_api(i["prompt"])
+                l.append({"image_url": image_url})
+            else:
+                image_url = await unsplash_it(i["prompt"])
+                l.append({"image_url": image_url})
+            finalList.append(l)
+        elif isinstance(i, list):
+            # Recursively call picGen on sublists
+            sublist_result = await picGen(i)
+            finalList.append(sublist_result)
 
-  Returns:
-    None.
-  """
+    return finalList
 
-  for dictionary in input_json:
-    if isinstance(dictionary, dict):
-      if dictionary["generate"]:
-        image_url = await call_dalle_api(dictionary["prompt"])
-        finalURLList.append([image_url])
-      else:
-        image_url = await unsplash_it(dictionary["prompt"])
-        finalURLList.append([image_url])
-    else:
-      await picGen(dictionary, finalURLList)
+def extractImage(input_list):
+     finalList = []
+
+     for i in input_list:
+         if isinstance(i, dict):
+             l = []
+              
+             finalList.append(i["image_url"])
+         elif isinstance(i, list):
+              # Recursively call picGen on sublists
+             finalList.append(i)
+
+     return finalList
+
+      
+    
+      
+
+
+
+# async def picGen(input_json, finalURLList: list):
+#   """Recursively generates image URLs for the given input JSON.
+
+#   Args:
+#     input_json: A list of dictionaries, where each dictionary contains a "generate"
+#       boolean field and a "prompt" string field.
+#     finalURLList: A list of lists of image URLs.
+
+#   Returns:
+#     None.
+#   """
+
+#   for dictionary in input_json:
+#     if isinstance(dictionary, dict):
+#       if dictionary["generate"]:
+#         image_url = await call_dalle_api(dictionary["prompt"])
+#         finalURLList.append([image_url])
+#       else:
+#         image_url = await unsplash_it(dictionary["prompt"])
+#         finalURLList.append([image_url])
+#     else:
+#       await picGen(dictionary, finalURLList)
 
 
 async def call_dalle_api(prompt):
@@ -168,7 +203,7 @@ async def call_dalle_api(prompt):
     A string containing the image URL, or None if the API fails.
   """
 
-  async with httpx.AsyncClient() as client:
+  async with httpx.AsyncClient(timeout=120) as client:
     response = await client.post(
         "https://api.openai.com/v1/images/generations",
         headers={"Authorization": f"Bearer {openai.api_key}"},
@@ -183,7 +218,7 @@ async def call_dalle_api(prompt):
     if response.status_code != 200:
       return None
 
-    response_json = await response.json()
+    response_json = response.json()
     return response_json["data"][0]["url"]
 
 
@@ -203,7 +238,9 @@ async def unsplash_it(query):
     if response.status_code != 200:
       return None
 
-    response_json = await response.json()
+    # Get parsable JSON from the response
+    response_json = response.json()
+
     return response_json[0]
 
 
