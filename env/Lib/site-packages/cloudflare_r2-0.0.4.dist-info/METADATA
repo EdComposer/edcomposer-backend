@@ -1,0 +1,31 @@
+Metadata-Version: 2.1
+Name: cloudflare-r2
+Version: 0.0.4
+Summary: Wrapper around commonly used boto3 functions in Cloudflare R2 API.
+Home-page: https://mv3.dev
+Author: Marcelino G. Veloso III
+Author-email: contact@mv3.dev
+Requires-Python: >=3.11,<4.0
+Classifier: Development Status :: 4 - Beta
+Classifier: Framework :: Pytest
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Typing :: Typed
+Requires-Dist: boto3 (>=1.26,<2.0)
+Requires-Dist: start-cloudflare (>=0.0.3,<0.0.4)
+Project-URL: Documentation, https://justmars.github.io/cloudflare-r2
+Project-URL: Repository, https://github.com/justmars/cloudflare-r2
+Description-Content-Type: text/markdown
+
+# cloudflare-r2
+
+![Github CI](https://github.com/justmars/cloudflare-r2/actions/workflows/main.yml/badge.svg)
+
+## Development
+
+See [documentation](https://justmars.github.io/cloudflare-r2).
+
+1. Run `poetry install`
+2. Run `poetry shell`
+3. Run `pytest`
+
