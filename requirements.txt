@@ -1,6 +1,6 @@
 requests
 boto3
-dotenv-python
+python-dotenv
 fastapi
 uvicorn
 aiohttp
