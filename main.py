@@ -1,11 +1,15 @@
 import os
 import json
+
+import requests
 from audio_gen import generate_audio_urls
 import openai
 import asyncio
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import httpx
+
+from d import generate_metadata
 
 load_dotenv()
 
@@ -14,71 +18,69 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
+
 # Define the FastAPI route for generating video data
+@app.get("/video-data")
 @app.get("/video-data")
 async def generate_video_data(prompt: str):
     print("Received prompt:", prompt)
 
     # Generate audio information using OpenAI GPT-4
     print("Generating audio...")
-    audio_generation_lists = json.loads(openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {
-                'role': "system",
-                "content": '''
+    audio_generation_lists = json.loads(
+        openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
 THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT NEEDS TO BE A VALID JSON STRING SO DO NOT INCLUDE ANY OTHER EXTRA INFORMATION AT ALL.
                 You are an array generator that will return detailed information about a given topic in a nested array format.
                 You will return NOTHING except a python list with nested lists representing subtopics and containing details about the subtopic.
                 The details should be strings and each string should be a complete sentence focusing on one idea.
                 The format to be followed is [[<detail>,<detail>...],[<detail>,<detail>...]...]. The topic is 
-                '''
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )["choices"][0]["message"]["content"])
+                """,
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )["choices"][0]["message"]["content"]
+    )
 
     print("Audio generation completed.")
     print("Received audio_generation_lists:", audio_generation_lists)
 
-    audio_url_list = []
-
     image_generation_lists = []
 
-    # Process each audio generation list
+    # for every element in the audio_generation_lists, ask openai to generate a dictoinary with a boolean field called generate and a string field called prompt
     for audio_generation_list in audio_generation_lists:
-        # Generate image information using OpenAI GPT-4
-        print("Generating image for audio generation list...")
-        image_generation_list = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {
-                    'role': "system",
-                    "content": '''THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT NEEDS TO BE A VALID JSON STRING SO DO NOT INCLUDE ANY OTHER EXTRA INFORMATION AT ALL.
-                    You are an array generator that will receive an array of strings and generate NOTHING but an array with nested dictionaries (a single dictionary for each string in the input list).
+        image_generation_list = []
+        print(audio_generation_list)
+        for audio_generation in audio_generation_list:
+            image_dict = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT NEEDS TO BE A VALID JSON STRING SO DO NOT INCLUDE ANY OTHER EXTRA INFORMATION AT ALL.
+                        You are a dictionary generator that has to output if the image can be found online or not and a prompt for the image generation.
                     Each dictionary should have a boolean field called generate and a string field called prompt.
                     The generate field should be python boolean False if the image can easily be found online OR if it violates policy and python boolean True otherwise.
                     If generate is true then the prompt field should contain a detailed prompt (that follows DALL-E policy) from the input string for image generation, otherwise the prompt field will contain a simplified string for google search.
-                    GENERATE THE EXACT SAME AMOUNT OF DICTIONARIES AS THE AMOUNT OF STRINGS IN EACH LIST.
-                    The format to be followed is [{"generate": <True/False>, "prompt":<prompt string>}, {"generate": <True/False>, "prompt" :<prompt string>},...]. The input array is '''
-                },
-                {
-                    "role": "user",
-                    "content": str(audio_generation_list)
-                }
-            ]
-        )["choices"][0]["message"]["content"]
+                    GENERATE THE EXACT SAME AMOUNT OF DICTIONARIES AS THE AMOUNT OF STRINGS IN the LIST.
+                    The format to be followed is {"generate": <true/false>, "prompt":<prompt string>} """,
+                    },
+                    {"role": "user", "content": audio_generation},
+                ],
+            )["choices"][0]["message"]["content"]
+            print(image_dict)
+            image_dict = json.loads(
+                image_dict.replace("True", "true").replace("False", "false")
+            )
+            print(image_dict)
 
-        print("Image generation completed for audio generation list.")
-        print("Generated image_generation_list:", image_generation_list)
-
-        image_generation_list_parsed = json.loads(image_generation_list.replace("True", "true").replace("False", "false"))
-
-        if len(image_generation_list_parsed):
-            image_generation_lists.append(image_generation_list_parsed)
+            image_generation_list.append(image_dict)
+        image_generation_lists.append(image_generation_list)
+        print("Image dict:", image_generation_list)
 
     # # Generate audio URLs asynchronously
     # print("Generating audio URLs...")
@@ -87,70 +89,126 @@ THE MOST IMPORTANT THING IS TO RETURN ONLY TEXT THAT CAN BE PARSED AS JSON, IT N
 
     # Prepare video data
     audioUrlList = await generate_audio_urls(audio_generation_lists)
+    print("This is audioUrlList", audioUrlList)
 
-    imageUrlList = await picGen(image_generation_lists)
+    print("This is audio_generation_lists", audio_generation_lists)
+    print("This is imageUrlList", image_generation_lists)
+
+    imageUrlList = await picGen(image_generation_lists,[])
+    print("This is imageUrlList", image_generation_lists)
+
+    # create a list of dictionaries for each item in the audio_generation_lists that contains the audio url, image url, and caption
+    for audio_urls, image_urls, caption in zip(
+        audioUrlList, imageUrlList, audio_generation_lists
+    ):
+        current_data = []
+        for i in range(len(caption)):
+            current_data.append(
+                {
+                    "audio_url": audio_urls[i],
+                    "image_url": image_urls[i],
+                    "caption": caption[i],
+                }
+            )
+        video_data.append(current_data)
 
     video_data = []
 
-    for audio_urls, image_urls, caption in zip(audioUrlList, imageUrlList, audio_generation_lists):
-        current_data = []
-        for audio_url,image_url, caption in zip(audio_urls, image_urls, caption):
-            current_data.append({
-                'caption': caption,
-                'audio': audio_url,
-                'image': image_url  # Replace with the appropriate image URL
-            })
+    # for audio_urls, image_urls, caption in zip(audioUrlList, imageUrlList, audio_generation_lists):
+    #     current_data = []
+    #     for i in range(len(caption)):
+    #         current_data.append(
+    #             {
+    #                 "audio_url": audio_urls[i],
+    #                 "image_url": image_urls[i],
+    #                 "caption": caption[i],
+    #             }
+    #         )
+    #     video_data.append(current_data)
 
-        video_data.append(current_data)
+    final_data = {"sequences": video_data, "metadata": await generate_metadata(prompt)}
 
-    print("Video data generated.",video_data)
+    print("Video data generated.", final_data)
+    return final_data
 
-    return video_data
 
+#I want to traverse to image_generation_lists and then for each element in the list, i want to call the picGen function. I want to do this for each element in the list when i dont know the dimension of the list 
 
-# Additional code for image generation
-async def picGen(input: list[list[dict[str, str]]]):
-    output = []
+async def picGen(input_json, finalURLList: list):
+  """Recursively generates image URLs for the given input JSON.
 
-    for i in range(0, len(input)):
-        currentOutput = []
-        for j in range(0, len(input[i])):
-            if input[i][j]["generate"]:
-                currentOutput.append(await call_dalle_api(input[i][j]["prompt"]))
-            else:
-                currentOutput.append(await unsplash_it(input[i][j]["prompt"]))
-        output.append(currentOutput)
+  Args:
+    input_json: A list of dictionaries, where each dictionary contains a "generate"
+      boolean field and a "prompt" string field.
+    finalURLList: A list of lists of image URLs.
 
-    return output
+  Returns:
+    None.
+  """
+
+  for dictionary in input_json:
+    if isinstance(dictionary, dict):
+      if dictionary["generate"]:
+        image_url = await call_dalle_api(dictionary["prompt"])
+        finalURLList.append([image_url])
+      else:
+        image_url = await unsplash_it(dictionary["prompt"])
+        finalURLList.append([image_url])
+    else:
+      await picGen(dictionary, finalURLList)
 
 
 async def call_dalle_api(prompt):
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/images/generations",
-            headers={"Authorization": f"Bearer {openai.api_key}"},
-            json={
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-                "response_format": "url",
-            },
-        )
-        print(response)
-        print(response.content)
-        response = response.json()
-        print("DALLE response: " + str(response))
-        return response["data"][0]["url"]
+  """Generates an image URL using the DALL-E API.
+
+  Args:
+    prompt: A string containing the prompt for the image.
+
+  Returns:
+    A string containing the image URL, or None if the API fails.
+  """
+
+  async with httpx.AsyncClient() as client:
+    response = await client.post(
+        "https://api.openai.com/v1/images/generations",
+        headers={"Authorization": f"Bearer {openai.api_key}"},
+        json={
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+            "response_format": "url",
+        },
+    )
+
+    if response.status_code != 200:
+      return None
+
+    response_json = await response.json()
+    return response_json["data"][0]["url"]
+
 
 async def unsplash_it(query):
-    url = f"https://edcomposer.vercel.app/api/getGoogleResult?search={query}"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+  """Generates an image URL using the Unsplash API.
 
-        return response.json()[0]
+  Args:
+    query: A string containing the query for the image.
+
+  Returns:
+    A string containing the image URL, or None if the API fails.
+  """
+
+  async with httpx.AsyncClient() as client:
+    response = await client.get(f"https://edcomposer.vercel.app/api/getGoogleResult?search={query}")
+
+    if response.status_code != 200:
+      return None
+
+    response_json = await response.json()
+    return response_json[0]
+
 
 # Main function
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", reload=True)
